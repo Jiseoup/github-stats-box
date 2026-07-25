@@ -8,16 +8,16 @@ on:
 jobs:
     run:
         runs-on: ubuntu-latest
+        permissions:
+            contents: write # Needed for the keepalive step to push an empty commit
         steps:
-            - uses: actions/setup-node@master
+            - uses: actions/checkout@v4
+            - uses: actions/setup-node@v4
               with:
-                  node-version: 16
+                  node-version: 20
             # If you edit the .js files and want to run them in your GitHub Action, you need to:
-            # - uncomment the 2 following lines
             # - replace "npx github-stats-box@1" with "npm start"
             # N.B: Your action will not receive future updates if you do so
-
-            # - uses: actions/checkout@master
             # - run: npm ci
             - run: npx github-stats-box@1
               env:
@@ -25,3 +25,16 @@ jobs:
                   GIST_ID: ${{ secrets.GIST_ID }} # The ID portion from your gist url
                   ALL_COMMITS: true # If `true` it will count all commits, if `false` it will count your last year commits
                   K_FORMAT: true # If `true`, large numbers will be formatted with a "k", for example "1.5k"
+            # Keeps the scheduled workflow from being auto-disabled after 60 days of inactivity.
+            # Pushes an empty keepalive commit only when the repo has had no commits for 50+ days.
+            - name: Keepalive
+              run: |
+                  last=$(git log -1 --format=%ct)
+                  days=$(( ( $(date +%s) - last ) / 86400 ))
+                  echo "Days since last commit: $days"
+                  if [ "$days" -ge 50 ]; then
+                      git config user.name "github-actions[bot]"
+                      git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+                      git commit --allow-empty -m "chore: keepalive to prevent workflow auto-disable"
+                      git push
+                  fi
